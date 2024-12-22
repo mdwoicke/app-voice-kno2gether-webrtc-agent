@@ -1,0 +1,27 @@
+# Use Conda as base image
+FROM continuumio/miniconda3:latest
+
+# Set working directory
+WORKDIR /app
+
+# Copy environment.yml and other necessary files
+COPY environment.yml .
+COPY humanoid_agent.py .
+COPY .env.local .
+COPY pizza_company_data/ ./pizza_company_data/
+COPY mock_order_service.py .
+
+# Create Conda environment from yml file
+RUN conda env create -f environment.yml
+
+# Make RUN commands use the new environment
+SHELL ["conda", "run", "-n", "lktest", "/bin/bash", "-c"]
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+
+# Expose necessary ports (if any)
+EXPOSE 7880
+
+# Set the default command
+CMD ["conda", "run", "--no-capture-output", "-n", "lktest", "python", "humanoid_agent.py", "start"]
