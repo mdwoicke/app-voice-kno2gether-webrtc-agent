@@ -13,6 +13,7 @@ from livekit.agents import (
 from livekit.agents.pipeline import VoicePipelineAgent
 from livekit.plugins import deepgram, openai, silero, turn_detector
 from typing import Annotated, Dict
+from livekit import agents, rtc, api
 import re
 import os
 from llama_index.core import (
@@ -44,12 +45,10 @@ else:
     storage_context = StorageContext.from_defaults(persist_dir=PERSIST_DIR)
     index = load_index_from_storage(storage_context)
 
-class PizzaOrderFunction(llm.FunctionContext):
-    def __init__(self):
-        self.current_order: Dict = {}
+class PizzaOrderFunction(agents.llm.FunctionContext):
 
-    @llm.ai_callable(
-        description="Called to validate a UK address and postcode"
+    @agents.llm.ai_callable(
+        description="Called to validate a UK address and postcode when provided by user"
     )
     async def validate_address(
         self,
@@ -66,8 +65,8 @@ class PizzaOrderFunction(llm.FunctionContext):
         self.current_order['address'] = address
         return "Address validated successfully. What would you like to order?"
 
-    @llm.ai_callable(
-        description="Called to validate customer information"
+    @agents.llm.ai_callable(
+        description="Called to validate customer phone number when provided by user"
     )
     async def set_customer_info(
         self,
@@ -89,8 +88,8 @@ class PizzaOrderFunction(llm.FunctionContext):
         })
         return "Customer information recorded. What's your delivery address?"
 
-    @llm.ai_callable(
-        description="Called when user asks about menu items, prices, or general information about KnoOrdinary Pizza Center"
+    @agents.llm.ai_callable(
+        description="Called when user asks about menu items, prices, or general information about KnoOrdinary Pizza Center."
     )
     async def query_pizza_info(
         self,
@@ -107,7 +106,7 @@ class PizzaOrderFunction(llm.FunctionContext):
         print("Query result:", res)
         return str(res)
 
-    @llm.ai_callable(
+    @agents.llm.ai_callable(
         description="Called when a user wants to place a pizza order"
     )
     async def place_order(
@@ -132,7 +131,7 @@ class PizzaOrderFunction(llm.FunctionContext):
         else:
             return f"Sorry, there was an issue with your order: {result.get('error', 'Unknown error')}. Please try again or call us directly."
 
-    @llm.ai_callable(
+    @agents.llm.ai_callable(
         description="Called when user asks about special offers or deals"
     )
     async def check_special_offers(
@@ -157,13 +156,7 @@ async def entrypoint(ctx: JobContext):
         text=(
             "You are a friendly voice assistant for KnoOrdinary Pizza Center, located at 42 Baker Street, Westminster, London. "
             "You help customers place pizza orders and provide information about our menu and services. "
-            "Here's what customers need to know: "
-             "- We're open daily from 11:00 AM to 11:00 PM "
-            "- We offer both classic and signature pizzas, ranging from £10.99 to £15.99 "
-            "- Our most popular pizzas include Margherita (£10.99), Pepperoni Passion (£12.99), and our signature KnoOrdinary Special (£15.99) "
-            "- We have great vegetarian options like Veggie Supreme (£11.99) and Mediterranean Delight (£14.99) "
-            "- Delivery is free within 3 miles, £2.50 for 3-5 miles, with a minimum order of £15.00 "
-            "- We have special offers: Monday Madness (50% off classics), Student Discount (10% off), and Family Deal (2 large pizzas + 2 sides for £35) "
+            "Use avaialble functions/tools to answer user quries whenever needed."
             "When taking orders first ask the customer their name and address in sequence and validate if the address is valid UK Address like if the PostCode is valid format or not. "
             "You should use short and concise responses, avoiding usage of unpronounceable punctuation. "
             "Remember user could be anyone from different age group, they may speak slow, so use your judgement based on complete information given not piece of it as they speak"
@@ -183,6 +176,7 @@ async def entrypoint(ctx: JobContext):
         stt=deepgram.STT(),
         tts=openai.TTS(),
         chat_ctx=initial_ctx,
+        fnc_ctx=PizzaOrderFunction(),
         llm=openai.LLM(model="gpt-4o-mini"),
         turn_detector=turn_detector.EOUModel(),
     )
